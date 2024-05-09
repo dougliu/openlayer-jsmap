@@ -1,0 +1,214 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>County Voters Heatmap</title>
+    <link rel="stylesheet" href="./css/site.css"  />
+    <link rel="stylesheet" href="./css/main.css"  />
+    <script src="https://openlayers.org/en/v6.14.1/build/ol.js"></script>
+    <link rel="stylesheet" href="https://openlayers.org/en/v6.14.1/css/ol.css">  
+</head>
+<body>
+    <header>
+    </header>
+    <div class="container">
+        <main role="main" class="pb-3">
+
+
+    <h1>Cases by Michigan County</h1>
+    <div id="mimap" class="map"></div>
+    <div style="display: none;">
+        <img id="colorbar" class="img-responsive" src="./images/colorbar160.png" hight="100" alt="Color Bar">
+    </div>
+    <div id="start" style="display:none">
+	    <section class="text">START</section>
+    </div>
+    <br />
+    <div id="info" class="alert alert-success" >&nbsp;</div>
+    <br>
+   
+
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+            &copy; 2022 - GovCSview
+    </footer>
+
+    <!-- <script src="./js/site.js" asp-append-version="true"></script> -->
+    <script src="https://js.arcgis.com/4.22/"></script>
+	<script src="Data/Mi_county_CASE_CNT_20220320_5m.GeoJSON.js"></script>
+
+
+	<script>
+		var styleCache = {};
+		// License: MIT - https://opensource.org/licenses/MIT
+		// Author: Michele Locati <michele@locati.it>
+		// Source: https://gist.github.com/mlocati/7210513
+		function perc2color(perc) {
+			var r, g, b = 0;
+			if(perc < 50) {
+				r = 255;
+				g = Math.round(5.1 * perc);
+			}
+			else {
+				g = 255;
+				r = Math.round(510 - 5.10 * perc);
+			}
+			var h = r * 0x10000 + g * 0x100 + b * 0x1;
+			return '#' + ('000000' + h.toString(16)).slice(-6);
+		}
+
+		var vectorLayer = new ol.layer.Vector({		
+			source: new ol.source.Vector({
+				features: new ol.format.GeoJSON().readFeatures(geojsonObject,{featureProjection: 'EPSG:3857'})
+			}),
+			style: function(feature, resolution) {
+			  var text = resolution < 5000 ? feature.get('NAME') : '';
+			  var cnt = resolution < 5000 ? feature.get('CASECNT') : '';
+			  cnt = cnt > 90000 ? cnt: cnt + 19000;
+			  cnt = cnt > 90000 ? cnt: cnt + 20000;
+			  cnt = cnt > 70000 ? cnt: cnt + 8000;
+			  //cnt = cnt > 60000 ? cnt: cnt - 5000;
+			  cnt = cnt > 52000 ? cnt: cnt - 5000;
+			  cnt = cnt > 44000 ? cnt: cnt - 10000;
+			  cnt = cnt > 33000 ? cnt: cnt - 10000;
+			  cnt = cnt > 32000 ? cnt: cnt - 10000;
+			  //cnt = cnt > 22500 ? cnt: cnt - 10000;
+			  //cnt = cnt > 11900 ? cnt: cnt - 8000;
+			  //cnt = cnt > 1500 ? cnt: cnt - 1000;
+			  var color = (99900-cnt)/99900 *100;
+			  if (!styleCache[text]) {
+				styleCache[text] = [new ol.style.Style({
+				  fill: new ol.style.Fill({
+					color: perc2color(color) //'rgba(255, 255, 255, 0.6)'
+				  }),
+				  stroke: new ol.style.Stroke({
+					color: '#319FD3',
+					width: 1
+				  }),
+				  text: new ol.style.Text({
+					font: '9px Calibri,sans-serif',
+					text: text +'('+cnt+')',
+					fill: new ol.style.Fill({
+					  color: '#000'
+					}),
+					stroke: new ol.style.Stroke({
+					  color: '#fff',
+					  width: 3
+					})
+				  })
+				})];
+			  }
+			  return styleCache[text];
+			}
+		});
+		// interaction select
+		var select = new ol.interaction.Select();
+
+		var modify = new ol.interaction.Modify({
+			features: select.getFeatures()
+		}); // end interaction
+		// mouse Position 
+		var mousePositionControl = new ol.control.MousePosition({
+		  coordinateFormat: ol.coordinate.createStringXY(4),
+		  projection: 'EPSG:4326',
+		  // comment the following two lines to have the mouse position
+		  // be placed within the map.
+		  className: 'custom-mouse-position',
+		  target: document.getElementById('mouse-position'),
+		  undefinedHTML: '&nbsp;'
+		});
+		// end mouse position
+		// scale control
+		var scaleLineControl = new ol.control.ScaleLine();
+		scaleLineControl.setUnits('us');
+		// end scale control
+		var map = new ol.Map({
+			  //controls: ol.control.defaults({
+			  //  attributionOptions: /** type {olx.control.AttributionOptions} */ ({
+			  //    collapsible: false
+			  //  })
+			  //}).extend([mousePositionControl]),
+		//controls: ol.control.defaults().extend([scaleLineControl,mousePositionControl]),
+		interactions: ol.interaction.defaults().extend([select, modify]),
+		target: 'mimap',
+		layers: [ 
+			new ol.layer.Tile({
+			source: new ol.source.OSM()
+			})
+			, vectorLayer
+		],
+		view: new ol.View({
+			center: ol.proj.fromLonLat([-84.847309, 44.858037]),
+			maxZoom: 6,
+			minZoom: 6,
+			zoom: 6
+		})
+		});
+			  // overlay colorbar
+		var pos = ol.proj.fromLonLat([-89.5, 43.3]);
+		var colorbar = new ol.Overlay({
+		position: pos,
+		positioning: 'center-center',
+		element: document.getElementById('colorbar'),
+		stopEvent: false,
+		maxResolution: 6
+		});
+		map.addOverlay(colorbar);
+		// end colorbar
+		var featureOverlay = new ol.layer.Vector({
+			source: new ol.source.Vector(),
+			map: map,
+			style: new ol.style.Style({
+			  stroke: new ol.style.Stroke({
+				color: '#f00',
+				width: 1
+			  }),
+			  fill: new ol.style.Fill({
+				color: 'rgba(255,0,0,0.1)'
+			  })
+			})
+		  });
+		var highlight;
+		var displayFeatureInfo = function(pixel) {
+
+		  var feature = map.forEachFeatureAtPixel(pixel, function(feature, layer) {
+			return feature;
+		  });
+
+		  var info = document.getElementById('info');
+		  if (feature) {
+			info.innerHTML = feature.get('NAME') +' '+ feature.get('LSAD') + '\'s Case Count: '+feature.get('CASECNT'); //+ ';    Area: '+feature.get('CENSUSAREA')
+		  } else {
+			info.innerHTML = '&nbsp;';
+		  }
+				  
+		  if (feature !== highlight) {
+			  if (highlight) {
+				featureOverlay.getSource().removeFeature(highlight);
+			  }
+			  if (feature) {
+				featureOverlay.getSource().addFeature(feature);
+			  }
+			  highlight = feature;
+			}
+		};
+			  
+		map.on('pointermove', function(evt) {
+			if (evt.dragging) {
+			  return;
+			}
+			var pixel = map.getEventPixel(evt.originalEvent);
+			displayFeatureInfo(pixel);
+		  });
+
+		map.on('click', function(evt) {
+		  displayFeatureInfo(evt.pixel);
+		});
+
+	</script>
+
+</body>
+</html>
